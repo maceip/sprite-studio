@@ -634,6 +634,7 @@ export function mountApp(root: HTMLElement) {
 
   function renderCharacterList(state: ReturnType<typeof store.get>) {
     if (!characterItemsList) return;
+    renderAssetList(state);
     const project = state.project;
     const sprites = (project?.sprites ?? []).filter((s) => s.kind !== "asset");
     const activeId = project?.activeSpriteId;
