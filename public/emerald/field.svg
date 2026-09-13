@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="720" viewBox="0 0 1440 720">
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#111b1a"/><stop offset=".5" stop-color="#3b4846"/><stop offset="1" stop-color="#162220"/></linearGradient>
+    <radialGradient id="orb" cx=".3" cy=".22" r=".79"><stop stop-color="#e5ece7"/><stop offset=".32" stop-color="#b2c1b8"/><stop offset=".67" stop-color="#6c7e74"/><stop offset=".91" stop-color="#35483f"/><stop offset="1" stop-color="#182e23"/></radialGradient>
+    <linearGradient id="ribbon" x1=".1" y1="0" x2=".9" y2="1"><stop stop-color="#bdd2cc"/><stop offset=".22" stop-color="#708b87"/><stop offset=".5" stop-color="#3c5552"/><stop offset=".75" stop-color="#8ea7a0"/><stop offset="1" stop-color="#d9e5df"/></linearGradient>
+    <linearGradient id="edge" x2="1" y2="1"><stop stop-color="#d5e2db"/><stop offset=".5" stop-color="#70857b"/><stop offset="1" stop-color="#e0ece4"/></linearGradient>
+    <radialGradient id="halo"><stop stop-color="#a2cab9" stop-opacity=".24"/><stop offset="1" stop-color="#a2cab9" stop-opacity="0"/></radialGradient>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="24"/></filter>
+    <pattern id="lines" width="64" height="64" patternUnits="userSpaceOnUse"><path d="M64 0H0V64" fill="none" stroke="#adc5bb" stroke-opacity=".11"/></pattern>
+  </defs>
+  <path fill="url(#bg)" d="M0 0h1440v720H0z"/>
+  <path fill="url(#lines)" d="M0 0h1440v720H0z"/>
+  <ellipse cx="810" cy="365" rx="620" ry="480" fill="url(#halo)"/>
+  <ellipse cx="765" cy="609" rx="211" ry="38" fill="#061810" opacity=".6" filter="url(#shadow)"/>
+  <path d="M-100 481C162 675 353 588 423 367S702 71 929 211s331 49 473-132" fill="none" stroke="#0a2117" stroke-width="111" opacity=".4" filter="url(#shadow)"/>
+  <path d="M-100 441C162 635 353 548 423 327S702 31 929 171s331 49 473-132" fill="none" stroke="url(#ribbon)" stroke-width="103"/>
+  <path d="M-100 391C162 585 305 509 374 312S702-20 952 127s331 49 473-132" fill="none" stroke="url(#edge)" stroke-width="2" opacity=".65"/>
+  <circle cx="765" cy="356" r="213" fill="url(#orb)"/>
+  <path d="M-80 819C151 341 397 333 608 523s525 129 629-159 237-283 353-190" fill="none" stroke="#092219" stroke-width="116" opacity=".35" filter="url(#shadow)"/>
+  <path d="M-80 785C151 307 397 299 608 489s525 129 629-159 237-283 353-190" fill="none" stroke="url(#ribbon)" stroke-width="96"/>
+  <path d="M-123 765C122 256 423 261 640 453s487 113 552-139 237-283 353-190" fill="none" stroke="url(#edge)" stroke-width="2" opacity=".8"/>
+  <g fill="none" stroke="#d5e2db" opacity=".3"><circle cx="765" cy="356" r="271" stroke-dasharray="1 9"/><path d="M754 74h22M765 63v22M754 638h22M765 627v22"/></g>
+</svg>

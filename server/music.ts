@@ -26,10 +26,16 @@ export function validateMusicSettings(value: unknown, allowEmpty = false): Music
 }
 
 export function redactProviderError(message: string): string {
-  for (const key of [process.env.ELEVENLABS_API_KEY, process.env.OPENROUTER_API_KEY]) {
+  for (const key of [
+    process.env.ELEVENLABS_API_KEY,
+    process.env.OPENROUTER_API_KEY,
+    process.env.OPENAI_API_KEY,
+  ]) {
     if (key) message = message.split(key).join("***");
   }
-  return message.replace(/(?:sk-or-|xai-|sk_)[A-Za-z0-9_-]+/g, "***");
+  return message
+    .replace(/(?:sk-or-|xai-|sk-proj-|sk-admin-|sk_)[A-Za-z0-9_-]+/g, "***")
+    .replace(/\bsk-[A-Za-z0-9_-]{20,}\b/g, "***");
 }
 
 export async function generateMusic(settings: MusicSettings): Promise<Buffer> {

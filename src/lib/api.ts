@@ -1,5 +1,18 @@
+export interface SpriteItem {
+  id: string;
+  name: string;
+  path: string;
+  kind?: "character" | "asset";
+  category?: string;
+}
+
 export interface ProjectView {
-  project: { version: 1; name: string; activeSpriteId: string; sprites: { id: string; name: string; path: string }[] };
+  project: {
+    version: 1;
+    name: string;
+    activeSpriteId: string;
+    sprites: SpriteItem[];
+  };
   activeAnimationId: string;
   animations: { id: string; name: string }[];
   asepriteUrl: string | null;
@@ -16,6 +29,13 @@ export interface ProjectView {
   spritesheetFrameCount: number | null;
   previewGifUrl: string | null;
   updatedAt: string;
+  kind?: "character" | "asset";
+  category?: string;
+  perspective?: "isometric" | "sidescroller";
+  direction?: string;
+  moveType?: string;
+  assetKind?: "character" | "asset";
+  endingType?: "open-ended" | "seamless" | "custom";
 }
 
 export interface VideoModelOption {
@@ -94,12 +114,26 @@ export function generateSprite(
   return postJson("/api/sprites/generate", { prompt, model });
 }
 
+export function uploadSprite(image: string): Promise<GenerateSpriteResponse> {
+  return postJson("/api/sprites/upload", { image });
+}
+
+export interface AnimateOptions {
+  assetKind?: "character" | "asset";
+  perspective?: "isometric" | "sidescroller";
+  direction?: string;
+  moveType?: string;
+  endingType?: "open-ended" | "seamless" | "custom";
+  duration?: number;
+}
+
 export function animateSprite(
   image: string,
   text: string,
   model?: string,
+  options?: AnimateOptions,
 ): Promise<ProjectView> {
-  return postJson("/api/sprites/animate", { image, text, model });
+  return postJson("/api/sprites/animate", { image, text, model, ...options });
 }
 
 export function getVideoModels(): Promise<VideoModelsResponse> {
@@ -138,15 +172,38 @@ export function saveSpritesheet(dataUrl: string): Promise<ProjectView> {
   return postJson("/api/projects/spritesheet", { dataUrl });
 }
 
-export async function checkHealth(): Promise<{ ok: boolean; hasApiKey: boolean }> {
+export async function checkHealth(): Promise<{
+  ok: boolean;
+  hasApiKey: boolean;
+  hasOpenAiApiKey?: boolean;
+  hasElevenLabsApiKey?: boolean;
+  imageProvider?: string;
+}> {
   const res = await fetch("/api/health");
   return res.json();
 }
 
-export function changeSprite(action: "new" | "load" | "rename", value: string): Promise<ProjectView> {
-  return postJson(`/api/projects/sprites/${action}`, { value });
+export function changeSprite(
+  action: "new" | "load" | "rename" | "delete",
+  value: string,
+  kind?: "character" | "asset",
+  category?: string,
+): Promise<ProjectView> {
+  return postJson(`/api/projects/sprites/${action}`, { value, kind, category });
 }
-export function saveDraft(draft: { spritePrompt: string; motionPrompt: string; spriteModel: string; motionModel: string }): Promise<ProjectView> {
+export function saveDraft(draft: {
+  spritePrompt: string;
+  motionPrompt: string;
+  spriteModel: string;
+  motionModel: string;
+  perspective?: string;
+  direction?: string;
+  moveType?: string;
+  assetKind?: string;
+  endingType?: string;
+  kind?: string;
+  category?: string;
+}): Promise<ProjectView> {
   return postJson("/api/projects/draft", draft);
 }
 

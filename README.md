@@ -1,17 +1,17 @@
 # AI Game Studio
 
-Create named characters, animations, and sounds from text prompts. Generate a shared character reference, then create walking, idle, and other animations with automatically saved PNG and Aseprite files. Compose short music cues and looping background tracks in the same project. Image and video calls go through OpenRouter; Sound & SFX uses ElevenLabs directly from the server.
+Create named characters, animations, and sounds from text prompts. Generate a shared character reference, then create walking, idle, and other animations with automatically saved PNG and Aseprite files. Compose short music cues and looping background tracks in the same project. Character sprite generation supports the OpenAI API directly (or OpenRouter); video animations use OpenRouter; Sound & SFX uses ElevenLabs directly from the server.
 
 ## Setup
 
-Requires Node.js 20+, `ffmpeg` on your PATH, an [OpenRouter API key](https://openrouter.ai/keys) for characters/animations, and an ElevenLabs API key for Sound & SFX.
+Requires Node.js 20+, `ffmpeg` on your PATH, an [OpenAI API key](https://platform.openai.com/api-keys) or [OpenRouter API key](https://openrouter.ai/keys) for characters (and OpenRouter for video animations), and an ElevenLabs API key for Sound & SFX.
 
 ```bash
 npm install
 cp .env.example .env
 ```
 
-Set `OPENROUTER_API_KEY` and `ELEVENLABS_API_KEY` in `.env`, then run:
+Set `OPENAI_API_KEY` (or `OPENROUTER_API_KEY`) and `ELEVENLABS_API_KEY` in `.env`, then run:
 
 ```bash
 npm run dev
@@ -65,7 +65,7 @@ For compatibility, Sound & SFX retains the existing `music` storage fields, dire
 
 `output.audio` and `output.source` in `music.json` identify the current files, relative to the asset's folder. Older successful revisions remain available. Requests use `X-Project-Name`; draft, generation, and rename also require `X-Music-Id`, so another tab's selected sound cannot redirect a write.
 
-Routes remain `GET /api/models/music`, `GET /api/music`, and `POST /api/music/{new,load,rename,draft,generate}`. The model-list response reports ElevenLabs key availability; health reports `hasApiKey` for OpenRouter and `hasElevenLabsApiKey` for sounds. Either workflow can operate without the other provider's key. Keys stay on the server and are redacted from provider errors.
+Routes remain `GET /api/models/music`, `GET /api/music`, and `POST /api/music/{new,load,rename,draft,generate}`. The model-list response reports ElevenLabs key availability; health reports `hasApiKey` for OpenRouter, `hasOpenAiApiKey` for OpenAI, and `hasElevenLabsApiKey` for sounds. Workflows can operate without the other provider's key. Keys stay on the server and are redacted from provider errors.
 
 Run `npm run build` and `node --import tsx --test tests/*.test.ts`. Sound tests mock ElevenLabs responses and use real local audio processing; they do not incur model charges.
 

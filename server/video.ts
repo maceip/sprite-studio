@@ -1,42 +1,125 @@
-// Image-to-video generation via OpenRouter /api/v1/videos with polling.
-// Flow: submit job → poll polling_url every few seconds → on `completed`, return unsigned_urls[0]
-// Downloads use authorization headers only for OpenRouter-hosted URLs.
+// Image-to-video generation via OpenAI Sora or OpenRouter with polling.
+// Flow: submit job → poll every few seconds → on `completed`, return download target.
 
 import { prepareVideoReference } from "./video-reference.js";
 
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
+const OPENAI_BASE = "https://api.openai.com/v1";
 
 export const VIDEO_MODELS = [
-  { id: "x-ai/grok-imagine-video", label: "Grok Imagine Video", defaultDuration: 2 },
-  { id: "minimax/hailuo-3", label: "MiniMax H3", defaultDuration: 5 },
-  { id: "minimax/hailuo-3-max", label: "MiniMax H3 Max", defaultDuration: 5 },
-  { id: "bytedance/seedance-2.0", label: "Seedance 2.0", defaultDuration: 4 },
+  { id: "sora-2", label: "OpenAI Sora 2", defaultDuration: 4 },
+  { id: "sora-2-pro", label: "OpenAI Sora 2 Pro", defaultDuration: 4 },
 ] as const;
 
-export type VideoModelId = (typeof VIDEO_MODELS)[number]["id"];
+export type VideoModelId =
+  | (typeof VIDEO_MODELS)[number]["id"]
+  | "openai/sora-2"
+  | "openai/sora-2-pro"
+  | "x-ai/grok-imagine-video"
+  | "minimax/hailuo-3"
+  | "minimax/hailuo-3-max"
+  | "bytedance/seedance-2.0";
 
-export const DEFAULT_VIDEO_MODEL: VideoModelId = "x-ai/grok-imagine-video";
+export const DEFAULT_VIDEO_MODEL: VideoModelId = "sora-2";
 
 export function isVideoModelId(v: unknown): v is VideoModelId {
-  return typeof v === "string" && VIDEO_MODELS.some((m) => m.id === v);
+  return (
+    typeof v === "string" &&
+    (VIDEO_MODELS.some((m) => m.id === v) ||
+      v === "openai/sora-2" ||
+      v === "openai/sora-2-pro" ||
+      v === "x-ai/grok-imagine-video" ||
+      v === "minimax/hailuo-3" ||
+      v === "minimax/hailuo-3-max" ||
+      v === "bytedance/seedance-2.0")
+  );
 }
 
 export function defaultDurationFor(id: VideoModelId): number {
-  return VIDEO_MODELS.find((m) => m.id === id)!.defaultDuration;
+  const found = VIDEO_MODELS.find((m) => m.id === id);
+  if (found) return found.defaultDuration;
+  if (id === "x-ai/grok-imagine-video") return 2;
+  if (id === "bytedance/seedance-2.0") return 4;
+  if (id.startsWith("minimax/")) return 5;
+  return 4;
 }
 
 const POLL_INTERVAL_MS = 3000;
-const POLL_MAX_ATTEMPTS = 100; // ~5 min cap
+const POLL_MAX_ATTEMPTS = 120; // ~6 min cap
 
-const CHROMA_DIRECTIVE =
-  "Maintain the exact same flat solid pure chroma green background, " +
-  "hex #00b140, throughout the entire clip. No background changes, no " +
-  "environmental elements, no shadows on the background, no camera movement. " +
-  "The subject animates against the uniform green backdrop. " +
-  "Preserve the reference character's exact design, proportions, colors and pixel-art style. " +
-  "Keep the full character visible with consistent scale and framing. " +
-  "Perform only the requested movement; do not add motion or morph the character. " +
-  "Create a seamless cycle with matching starting and ending poses.";
+export interface MotionOptions {
+  assetKind?: "character" | "asset";
+  perspective?: "isometric" | "sidescroller";
+  direction?: string;
+  moveType?: string;
+  endingType?: "open-ended" | "seamless" | "custom";
+}
+
+export function buildMotionPrompt(text: string, options?: MotionOptions): string {
+  const assetKind = options?.assetKind ?? "character";
+  const perspective = options?.perspective ?? "isometric";
+  const direction = options?.direction;
+  const endingType = options?.endingType ?? "seamless";
+
+  const directives: string[] = [];
+
+  directives.push(
+    "Maintain the exact same flat solid pure chroma green background, hex #00b140, throughout the entire clip. " +
+    "No background changes, no environmental elements, no shadows on the background, no camera movement."
+  );
+
+  if (perspective === "isometric") {
+    directives.push(
+      "Fixed isometric 2.5D perspective angle. No camera rotation, panning, or tilt."
+    );
+  } else {
+    directives.push(
+      "Fixed 2D side-scroller perspective angle. No camera rotation or tilt."
+    );
+  }
+
+  if (direction) {
+    const dirMap: Record<string, string> = {
+      N: "North (facing away from camera / rear-angled)",
+      NE: "North-East (facing diagonally away to the right)",
+      E: "East (facing right)",
+      SE: "South-East (facing diagonally forward to the right)",
+      S: "South (facing toward camera / front-angled)",
+      SW: "South-West (facing diagonally forward to the left)",
+      W: "West (facing left)",
+      NW: "North-West (facing diagonally away to the left)",
+    };
+    const dirDesc = dirMap[direction.toUpperCase()] ?? direction;
+    directives.push(`Subject orientation: Facing ${dirDesc} in isometric space.`);
+  }
+
+  if (assetKind === "asset") {
+    directives.push(
+      "MECHANICAL ASSET / OBJECT CONSTRAINTS:\n" +
+      "- The vehicle chassis, truck body, wheels, base, cabin, and ground anchors must remain 100% COMPLETELY STATIC, RIGID, and FIRMLY GROUNDED. Do NOT drive, roll, bounce, drift, shake, tilt, or distort the vehicle.\n" +
+      "- ONLY the articulated moving components described in the prompt (e.g. hydraulic boom arm, crane, bucket, hinges, joints) move. The arm smoothly articulates and extends/lifts the bucket into the air and lowers it down with realistic mechanical precision.\n" +
+      "- Strictly preserve hard mechanical edges, textures, colors, and rigid geometry. No rubbery bending or morphing of non-articulated parts."
+    );
+  } else {
+    directives.push(
+      "Preserve the reference character's exact design, proportions, colors and pixel-art style. " +
+      "Keep the full character visible with consistent scale and framing. " +
+      "Perform only the requested movement; do not add motion or morph the character."
+    );
+  }
+
+  if (endingType === "seamless") {
+    directives.push(
+      "Create a seamless cycle with matching starting and ending poses so the animation loops perfectly."
+    );
+  } else if (endingType === "open-ended") {
+    directives.push(
+      "Perform the animation action naturally through its full movement arc."
+    );
+  }
+
+  return `${text.trim()}\n\n${directives.join(" ")}`;
+}
 
 type JobStatus =
   | "pending"
@@ -67,13 +150,119 @@ export interface VideoDownload {
 export async function generateSpriteMotionVideo(
   image: string,
   text: string,
+  duration = 4,
+  model: VideoModelId = DEFAULT_VIDEO_MODEL,
+  options?: MotionOptions,
+): Promise<VideoDownload> {
+  const isOpenAi =
+    model === "sora-2" ||
+    model === "sora-2-pro" ||
+    model === "openai/sora-2" ||
+    model === "openai/sora-2-pro" ||
+    (!model.startsWith("x-ai/") &&
+      !model.startsWith("minimax/") &&
+      !model.startsWith("bytedance/") &&
+      Boolean(process.env.OPENAI_API_KEY));
+
+  if (isOpenAi) {
+    return generateSpriteMotionVideoOpenAI(image, text, duration, model, options);
+  }
+  return generateSpriteMotionVideoOpenRouter(image, text, duration, model, options);
+}
+
+async function generateSpriteMotionVideoOpenAI(
+  image: string,
+  text: string,
+  duration: number,
+  model: string,
+  options?: MotionOptions,
+): Promise<VideoDownload> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
+
+  const openAiModel = model.replace(/^openai\//, "");
+  const fullText = buildMotionPrompt(text, options);
+  // Sora strictly requires the input image dimensions to match the requested size (1280x720)
+  const videoReference = await prepareVideoReference(image, { width: 1280, height: 720 });
+
+  const baseUrl = (process.env.OPENAI_BASE_URL ?? OPENAI_BASE).replace(/\/+$/, "");
+
+  let seconds: "4" | "8" | "12" = "4";
+  if (duration >= 10) seconds = "12";
+  else if (duration >= 6) seconds = "8";
+
+  const submitRes = await fetch(`${baseUrl}/videos`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: openAiModel,
+      prompt: fullText,
+      seconds,
+      size: "1280x720",
+      input_reference: {
+        image_url: videoReference,
+      },
+    }),
+  });
+
+  const submitJson = (await submitRes.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!submitRes.ok) {
+    const message =
+      typeof submitJson.error === "string"
+        ? submitJson.error
+        : (submitJson.error as { message?: string })?.message ?? `HTTP ${submitRes.status}`;
+    throw new Error(`OpenAI video submit failed: ${message}`);
+  }
+
+  const jobId = submitJson.id as string;
+  if (!jobId) {
+    throw new Error("OpenAI video submit returned no job id");
+  }
+
+  for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt++) {
+    await sleep(POLL_INTERVAL_MS);
+
+    const pollRes = await fetch(`${baseUrl}/videos/${jobId}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    const job = (await pollRes.json().catch(() => ({}))) as {
+      status?: string;
+      error?: string | { message?: string };
+    };
+
+    if (job.status === "completed") {
+      return {
+        url: `${baseUrl}/videos/${jobId}/content`,
+        headers: { Authorization: `Bearer ${apiKey}` },
+      };
+    }
+
+    if (job.status === "failed" || job.status === "cancelled" || job.status === "expired") {
+      const err =
+        typeof job.error === "string"
+          ? job.error
+          : job.error?.message ?? `OpenAI video ${job.status}`;
+      throw new Error(`OpenAI video ${job.status}: ${err}`);
+    }
+  }
+
+  throw new Error("OpenAI video did not complete within the timeout period");
+}
+
+async function generateSpriteMotionVideoOpenRouter(
+  image: string,
+  text: string,
   duration = 2,
   model: VideoModelId = DEFAULT_VIDEO_MODEL,
+  options?: MotionOptions,
 ): Promise<VideoDownload> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set");
 
-  const fullText = `${text.trim()}\n\n${CHROMA_DIRECTIVE}`;
+  const fullText = buildMotionPrompt(text, options);
   const videoReference = await prepareVideoReference(image);
   const reference = { type: "image_url", image_url: { url: videoReference } };
 

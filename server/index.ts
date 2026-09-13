@@ -14,7 +14,9 @@ import {
   DEFAULT_IMAGE_MODEL,
   IMAGE_MODELS,
   generateSpriteImage,
+  getActiveImageProvider,
   isImageModelId,
+  normalizeImageToPng,
 } from "./image.js";
 import {
   DEFAULT_VIDEO_MODEL,
@@ -55,7 +57,6 @@ import {
 
 
 const PORT = Number(process.env.PORT ?? 8787);
-const HAS_KEY = Boolean(process.env.OPENROUTER_API_KEY);
 
 const app = express();
 app.use(express.json({ limit: "50mb" }));
@@ -81,10 +82,29 @@ app.use("/api", (req, res, next) => {
 });
 app.use("/projects", express.static(PROJECTS_DIR, { fallthrough: false }));
 
-function requireKey(_req: Request, res: Response, next: NextFunction) {
-  if (!HAS_KEY) {
+app.get("/", (req: Request, res: Response) => {
+  if (req.accepts("html")) {
+    res.redirect("http://localhost:5173/");
+    return;
+  }
+  res.json({ ok: true, message: "Sprite Studio API running. Open http://localhost:5173/ in your browser." });
+});
+
+function requireSpriteKey(_req: Request, res: Response, next: NextFunction) {
+  if (!process.env.OPENAI_API_KEY && !process.env.OPENROUTER_API_KEY) {
     res.status(500).json({
-      error: "OPENROUTER_API_KEY is not configured. Add it to .env and restart the server.",
+      error: "Neither OPENAI_API_KEY nor OPENROUTER_API_KEY is configured. Add OPENAI_API_KEY to .env to use OpenAI, or OPENROUTER_API_KEY for OpenRouter.",
+    });
+    return;
+  }
+  next();
+}
+
+function requireAnimationKey(_req: Request, res: Response, next: NextFunction) {
+  if (!process.env.OPENAI_API_KEY && !process.env.OPENROUTER_API_KEY) {
+    res.status(500).json({
+      error:
+        "Neither OPENAI_API_KEY nor OPENROUTER_API_KEY is configured. Add OPENAI_API_KEY to .env to use OpenAI Sora, or OPENROUTER_API_KEY for OpenRouter.",
     });
     return;
   }
@@ -108,7 +128,13 @@ function asImageRef(v: unknown): string {
 }
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, hasApiKey: HAS_KEY, hasElevenLabsApiKey: Boolean(process.env.ELEVENLABS_API_KEY) });
+  res.json({
+    ok: true,
+    hasApiKey: Boolean(process.env.OPENROUTER_API_KEY),
+    hasOpenAiApiKey: Boolean(process.env.OPENAI_API_KEY),
+    hasElevenLabsApiKey: Boolean(process.env.ELEVENLABS_API_KEY),
+    imageProvider: getActiveImageProvider(),
+  });
 });
 
 app.get("/api/models/video", (_req, res) => {
@@ -116,7 +142,11 @@ app.get("/api/models/video", (_req, res) => {
 });
 
 app.get("/api/models/image", (_req, res) => {
-  res.json({ models: IMAGE_MODELS, default: DEFAULT_IMAGE_MODEL });
+  res.json({
+    models: IMAGE_MODELS,
+    default: DEFAULT_IMAGE_MODEL,
+    provider: getActiveImageProvider(),
+  });
 });
 
 app.get("/api/models/music", (_req, res) => {
@@ -220,8 +250,10 @@ app.post("/api/projects/new", async (req, res) => {
 app.post("/api/projects/sprites/:action", async (req, res) => {
   try {
     const action = req.params.action;
-    if (action !== "new" && action !== "load" && action !== "rename") throw new Error("Unknown sprite action");
-    res.json(await changeSprite(action, asString(req.body?.value, "value", 60)));
+    if (action !== "new" && action !== "load" && action !== "rename" && action !== "delete") throw new Error("Unknown sprite action");
+    const kind = req.body?.kind === "asset" ? "asset" : "character";
+    const category = typeof req.body?.category === "string" ? req.body.category : undefined;
+    res.json(await changeSprite(action as "new" | "load" | "rename" | "delete", asString(req.body?.value, "value", 60), kind, category));
   } catch (err) { handleError(err, res); }
 });
 
@@ -240,7 +272,7 @@ app.post("/api/projects/animations/:action", async (req, res) => {
 
 app.post("/api/projects/draft", async (req, res) => {
   try {
-    const patch: Record<string, string> = {
+    const patch: Record<string, unknown> = {
       spritePrompt: validatePrompt(req.body?.spritePrompt, "Character prompt", true),
       motionPrompt: validatePrompt(req.body?.motionPrompt, "Movement prompt", true),
     };
@@ -248,6 +280,11 @@ app.post("/api/projects/draft", async (req, res) => {
       const value = req.body?.[key];
       if (typeof value !== "string" || value.length > 2000) throw new Error(`Invalid ${key}: expected a model ID of up to 2,000 characters`);
       patch[key] = value;
+    }
+    for (const key of ["perspective", "direction", "moveType", "assetKind", "endingType", "kind", "category"]) {
+      if (typeof req.body?.[key] === "string") {
+        patch[key] = req.body[key];
+      }
     }
     res.json(toView(await updateSprite(patch)));
   } catch (err) { handleError(err, res); }
@@ -303,7 +340,7 @@ app.post("/api/projects/spritesheet", async (req, res) => {
   }
 });
 
-app.post("/api/sprites/generate", requireKey, async (req, res) => {
+app.post("/api/sprites/generate", requireSpriteKey, async (req, res) => {
   try {
     const current = await readManifest();
     if (!current.project!.activeSpriteId) throw new Error("Add a character first");
@@ -338,7 +375,46 @@ app.post("/api/sprites/generate", requireKey, async (req, res) => {
   }
 });
 
-app.post("/api/sprites/animate", requireKey, async (req, res) => {
+app.post("/api/sprites/upload", async (req, res) => {
+  try {
+    const current = await readManifest();
+    if (!current.project!.activeSpriteId) throw new Error("Add a character first");
+    const rawImage = asImageRef(req.body?.image);
+
+    let base64: string;
+    let declaredMediaType: string | undefined;
+    if (rawImage.startsWith("data:")) {
+      const match = /^data:image\/([a-zA-Z0-9.+-]+);base64,(.+)$/.exec(rawImage);
+      if (!match) throw new Error("Expected a valid image data URL");
+      declaredMediaType = `image/${match[1]}`;
+      base64 = match[2];
+    } else {
+      base64 = rawImage;
+    }
+
+    const pngBase64 = await normalizeImageToPng(base64, declaredMediaType);
+    const character = current.project!.sprites.find(s => s.id === current.project!.activeSpriteId)!;
+    const reference = `${assetName(character.name)}.png`;
+    const refAbs = path.join(activeSpriteDir(), reference);
+    await saveBase64Image(pngBase64, refAbs);
+    const buf = await readFile(refAbs);
+    const dims = readPngDims(buf);
+
+    const m = await updateSprite({
+      sprite: reference,
+      spriteDimensions: dims,
+    });
+
+    res.json({
+      view: toView(m),
+      dataUrl: `data:image/png;base64,${pngBase64}`,
+    });
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+app.post("/api/sprites/animate", requireAnimationKey, async (req, res) => {
   try {
     const current = await readManifest();
     if (!current.activeAnimationId) throw new Error("Add an animation first");
@@ -348,9 +424,21 @@ app.post("/api/sprites/animate", requireKey, async (req, res) => {
     const duration =
       typeof req.body?.duration === "number" ? req.body.duration : defaultDurationFor(model);
 
+    const assetKind = req.body?.assetKind ?? current.assetKind ?? (current.kind === "asset" ? "asset" : "character");
+    const perspective = req.body?.perspective ?? current.perspective ?? "isometric";
+    const direction = req.body?.direction ?? current.direction;
+    const moveType = req.body?.moveType ?? current.moveType;
+    const endingType = req.body?.endingType ?? current.endingType ?? "seamless";
+
     const imageInput = await resolveImageInput(image);
 
-    const video = await generateSpriteMotionVideo(imageInput, text, duration, model);
+    const video = await generateSpriteMotionVideo(imageInput, text, duration, model, {
+      assetKind,
+      perspective,
+      direction,
+      moveType,
+      endingType,
+    });
     const prefix = animationPath(current.activeAnimationId, `runs/${crypto.randomUUID()}`);
     const videoAbs = path.join(activeSpriteDir(), prefix, PROJECT_FILES.source);
     await downloadVideo(video.url, videoAbs, video.headers);
@@ -368,6 +456,11 @@ app.post("/api/sprites/animate", requireKey, async (req, res) => {
       spritesheetFrameCount: null,
       aseprite: null,
       previewGif: null,
+      assetKind,
+      perspective,
+      direction,
+      moveType,
+      endingType,
     });
 
     res.json(toView(m));
@@ -405,7 +498,9 @@ const server = app.listen(PORT, () => {
   const address = server.address();
   const port = typeof address === "object" && address ? address.port : PORT;
   console.log(`[server] listening on http://localhost:${port}`);
-  if (!HAS_KEY) {
-    console.warn("[server] WARNING: OPENROUTER_API_KEY is missing — character and animation generation are unavailable");
+  if (!process.env.OPENROUTER_API_KEY && !process.env.OPENAI_API_KEY) {
+    console.warn("[server] WARNING: Neither OPENAI_API_KEY nor OPENROUTER_API_KEY is configured — generation is unavailable");
+  } else if (process.env.OPENAI_API_KEY && !process.env.OPENROUTER_API_KEY) {
+    console.log("[server] OpenAI API configured for characters and animations (Sora)");
   }
 });

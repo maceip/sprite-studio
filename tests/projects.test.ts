@@ -112,7 +112,7 @@ test('named character and animation directories, renames, empty projects, and le
     view = await p.openProject('game');
     assert.equal(view.activeAnimationId, 'standing');
     assert.equal(view.motionPrompt, 'idle slowly');
-    assert.equal(view.spriteModel, 'openai/gpt-image-2.5-flare');
+    assert.equal(view.spriteModel, (await import('../server/image.js')).DEFAULT_IMAGE_MODEL);
     await within('researcher', 'standing', () => p.changeSprite('new', 'enemy'));
     await assert.rejects(within('researcher', 'standing', () => p.changeSprite('rename', 'enemy')), /already exists/);
     await within('researcher', 'standing', async () => {

@@ -68,3 +68,53 @@ for (const model of ["x-ai/grok-imagine-video", "minimax/hailuo-3", "minimax/hai
     );
   });
 }
+
+for (const model of ["sora-2", "sora-2-pro"] as const) {
+  test(`${model} submission sends scaled reference and returns download content from OpenAI`, async t => {
+    const original = reference();
+    const key = process.env.OPENAI_API_KEY;
+    const oldOrKey = process.env.OPENROUTER_API_KEY;
+    delete process.env.OPENROUTER_API_KEY;
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    t.after(() => {
+      if (key === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = key;
+      if (oldOrKey === undefined) delete process.env.OPENROUTER_API_KEY;
+      else process.env.OPENROUTER_API_KEY = oldOrKey;
+    });
+
+    const calls: { url: string; method: string; body?: Record<string, unknown> }[] = [];
+    t.mock.method(globalThis, "fetch", async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? "GET";
+      const body = init?.body ? JSON.parse(init.body as string) : undefined;
+      calls.push({ url, method, body });
+
+      if (url === "https://api.openai.com/v1/videos" && method === "POST") {
+        assert.equal(body.model, model);
+        assert.equal(body.size, "1280x720");
+        assert.equal(body.seconds, "4");
+        assert.ok(body.input_reference?.image_url?.startsWith("data:image/png;base64,"));
+        assert.match(body.prompt, /pixel-art style/);
+        return new Response(JSON.stringify({ id: `job-${model}`, status: "queued" }));
+      }
+      if (url === `https://api.openai.com/v1/videos/job-${model}`) {
+        return new Response(JSON.stringify({ id: `job-${model}`, status: "completed" }));
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+
+    const result = await generateSpriteMotionVideo(original, "walk right", 4, model);
+    assert.deepEqual(result, {
+      url: `https://api.openai.com/v1/videos/job-${model}/content`,
+      headers: { Authorization: "Bearer test-openai-key" },
+    });
+  });
+}
+
+test("prepareVideoReference with target size generates exact canvas dimensions", async () => {
+  const original = reference();
+  const sized = await prepareVideoReference(original, { width: 1280, height: 720 });
+  const raw = Buffer.from(sized.split(",")[1], "base64");
+  assert.equal(raw.readUInt32BE(16), 1280);
+  assert.equal(raw.readUInt32BE(20), 720);
+});

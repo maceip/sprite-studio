@@ -28,7 +28,7 @@ test('API requires explicit project context and serves assets from project stora
     const post = (route: string, body: unknown) => fetch(base + route, { method: 'POST', headers, body: JSON.stringify(body) });
     const videoModels = await (await fetch(base + '/api/models/video')).json();
     assert.ok(videoModels.models.some((model: { id: string; label: string; defaultDuration: number }) =>
-      model.id === 'minimax/hailuo-3-max' && model.label === 'MiniMax H3 Max' && model.defaultDuration === 5));
+      model.id === 'sora-2' && model.label === 'OpenAI Sora 2' && model.defaultDuration === 4));
     assert.equal((await post('/api/projects/draft', {})).status, 400);
     let response = await post('/api/projects/new', { name: 'demo' });
     assert.equal(response.status, 200);
@@ -123,6 +123,7 @@ test('API requires explicit project context and serves assets from project stora
     assert.ok(current.spriteUrl.endsWith('/researcher.png'));
     assert.equal(current.asepriteUrl, renamed.asepriteUrl.replace('/sprites/scientist/', '/sprites/researcher/'));
     assert.equal((await fetch(base + current.spriteUrl)).status, 200);
+
     response = await post('/api/projects/load', { name: 'demo' });
     current = await response.json();
     assert.equal(current.activeAnimationId, 'running');
@@ -130,6 +131,16 @@ test('API requires explicit project context and serves assets from project stora
     assert.equal(current.motionModel, 'minimax/hailuo-3-max');
     assert.equal(current.asepriteUrl, renamed.asepriteUrl.replace('/sprites/scientist/', '/sprites/researcher/'));
     headers['X-Sprite-Id'] = 'researcher';
+
+    const uploadRes = await post('/api/sprites/upload', {
+      image: `data:image/png;base64,${pngFixture(1, 1, [255, 0, 0, 255]).toString('base64')}`,
+    });
+    assert.equal(uploadRes.status, 200);
+    const uploaded = await uploadRes.json();
+    assert.ok(uploaded.view.spriteUrl.endsWith('/researcher.png'));
+    assert.ok(uploaded.dataUrl.startsWith('data:image/png;base64,'));
+    assert.equal((await fetch(base + uploaded.view.spriteUrl)).status, 200);
+
     response = await post('/api/projects/animations/duplicate', { value: 'running-2' });
     assert.equal(response.status, 200);
     const duplicate = await response.json();

@@ -1,8 +1,16 @@
 import { spawn } from "node:child_process";
 
+export interface VideoReferenceOptions {
+  width?: number;
+  height?: number;
+}
+
 // Video inputs need an opaque backdrop matching extract-frames.sh's chroma key.
 // Work in memory so the original transparent character reference stays intact.
-export async function prepareVideoReference(image: string): Promise<string> {
+export async function prepareVideoReference(
+  image: string,
+  options?: VideoReferenceOptions,
+): Promise<string> {
   let source: Buffer;
   if (image.startsWith("data:")) {
     const match = /^data:image\/[a-zA-Z0-9.+-]+;base64,([A-Za-z0-9+/=\s]+)$/.exec(image);
@@ -14,14 +22,20 @@ export async function prepareVideoReference(image: string): Promise<string> {
     source = Buffer.from(await response.arrayBuffer());
   }
 
+  const { width = 0, height = 0 } = options ?? {};
+
+  const filter =
+    width > 0 && height > 0
+      ? `[0:v]format=rgba,scale=${width}:${height}:force_original_aspect_ratio=decrease[fg];color=c=#00b140:s=${width}x${height}:d=1[bg];[bg][fg]overlay=(W-w)/2:(H-h)/2`
+      : `[0:v]format=rgba,split[foreground][background];` +
+        `[background]format=rgb24,lutrgb=r=0:g=177:b=64[green];` +
+        `[green][foreground]overlay=format=rgb,format=rgb24`;
+
   const png = await new Promise<Buffer>((resolve, reject) => {
     const chunks: Buffer[] = [];
     const child = spawn("ffmpeg", [
       "-hide_banner", "-loglevel", "error", "-i", "pipe:0",
-      "-filter_complex",
-      "[0:v]format=rgba,split[foreground][background];" +
-        "[background]format=rgb24,lutrgb=r=0:g=177:b=64[green];" +
-        "[green][foreground]overlay=format=rgb,format=rgb24",
+      "-filter_complex", filter,
       "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "pipe:1",
     ], { stdio: ["pipe", "pipe", "pipe"] });
     child.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));

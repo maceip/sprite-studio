@@ -4,15 +4,24 @@ import { stageAnimationAssets } from "./animation-assets.js";
 import { deleteAssetFolder } from "./asset-storage.js";
 import { readPngDims } from "./files.js";
 import { DEFAULT_IMAGE_MODEL } from "./image.js";
+import { DEFAULT_VIDEO_MODEL } from "./video.js";
 import { randomUUID } from "node:crypto";
 import { PROJECTS_DIR, PROJECT_FILES, projectDir, safeProjectName, safeAssetId, spriteFile,
   currentProjectName, projectContext, ensureInsideRoot } from "./files.js";
+
+export interface SpriteEntry {
+  id: string;
+  name: string;
+  path: string;
+  kind?: "character" | "asset";
+  category?: string;
+}
 
 export interface ProjectDocument {
   version: 1;
   name: string;
   activeSpriteId: string;
-  sprites: { id: string; name: string; path: string }[];
+  sprites: SpriteEntry[];
   activeMusicId?: string;
   music?: { id: string; name: string; path: string }[];
 }
@@ -28,6 +37,11 @@ interface AnimationManifest extends AnimationSummary {
   aseprite: string | null;
   previewGif: string | null;
   updatedAt: string;
+  perspective?: "isometric" | "sidescroller";
+  direction?: string;
+  moveType?: string;
+  assetKind?: "character" | "asset";
+  endingType?: "open-ended" | "seamless" | "custom";
 }
 interface CharacterManifest {
   version: 2;
@@ -39,6 +53,8 @@ interface CharacterManifest {
   activeAnimationId: string;
   animations: AnimationSummary[];
   updatedAt: string;
+  kind?: "character" | "asset";
+  category?: string;
 }
 
 export interface ProjectManifest {
@@ -59,6 +75,13 @@ export interface ProjectManifest {
   spritesheetFrameCount: number | null;
   previewGif: string | null;
   updatedAt: string;
+  kind?: "character" | "asset";
+  category?: string;
+  perspective?: "isometric" | "sidescroller";
+  direction?: string;
+  moveType?: string;
+  assetKind?: "character" | "asset";
+  endingType?: "open-ended" | "seamless" | "custom";
 }
 
 export interface ProjectView {
@@ -79,6 +102,13 @@ export interface ProjectView {
   spritesheetFrameCount: number | null;
   previewGifUrl: string | null;
   updatedAt: string;
+  kind?: "character" | "asset";
+  category?: string;
+  perspective?: "isometric" | "sidescroller";
+  direction?: string;
+  moveType?: string;
+  assetKind?: "character" | "asset";
+  endingType?: "open-ended" | "seamless" | "custom";
 }
 
 export function emptyManifest(name: string): ProjectManifest {
@@ -90,7 +120,7 @@ export function emptyManifest(name: string): ProjectManifest {
     spritePrompt: "",
     spriteModel: DEFAULT_IMAGE_MODEL,
     motionPrompt: "",
-    motionModel: "x-ai/grok-imagine-video",
+    motionModel: DEFAULT_VIDEO_MODEL,
     sprite: null,
     spriteDimensions: null,
     frames: [],
@@ -99,6 +129,13 @@ export function emptyManifest(name: string): ProjectManifest {
     spritesheetFrameCount: null,
     previewGif: null,
     updatedAt: new Date().toISOString(),
+    kind: "character",
+    category: "Main Assets",
+    perspective: "isometric",
+    direction: "N",
+    moveType: "walk",
+    assetKind: "character",
+    endingType: "seamless",
   };
 }
 
@@ -208,28 +245,59 @@ export async function readManifest(): Promise<ProjectManifest> {
     project: { ...doc, activeSpriteId: context.spriteId } };
   if (!character.animations.some(a => a.id === id)) throw new Error("Animation not found");
   const animation = JSON.parse(await readFile(spriteFile(animationPath(id, "animation.json")), "utf8")) as AnimationManifest;
-  return { ...character, ...animation, name: doc.name, activeAnimationId: id,
+  return {
+    ...character,
+    ...animation,
+    name: doc.name,
+    activeAnimationId: id,
     spriteModel: character.spriteModel === "openai/gpt-image-2.5-sunburst" ? DEFAULT_IMAGE_MODEL : character.spriteModel,
-    project: { ...doc, activeSpriteId: context.spriteId } };
+    kind: character.kind ?? "character",
+    category: character.category ?? (character.kind === "asset" ? "Main Assets" : undefined),
+    perspective: animation.perspective ?? "isometric",
+    direction: animation.direction ?? "N",
+    moveType: animation.moveType ?? "walk",
+    assetKind: animation.assetKind ?? (character.kind === "asset" ? "asset" : "character"),
+    endingType: animation.endingType ?? "seamless",
+    project: { ...doc, activeSpriteId: context.spriteId },
+  };
 }
 
 export async function updateSprite(patch: Partial<ProjectManifest>): Promise<ProjectManifest> {
   const current = await readManifest();
   const updated = { ...current, ...patch, updatedAt: new Date().toISOString() };
   const character = await characterManifest();
-  for (const key of ["spritePrompt", "spriteModel", "sprite", "spriteDimensions"] as const) {
-    Object.assign(character, { [key]: updated[key] });
+  for (const key of ["spritePrompt", "spriteModel", "sprite", "spriteDimensions", "kind", "category"] as const) {
+    if (updated[key] !== undefined) Object.assign(character, { [key]: updated[key] });
   }
   character.activeAnimationId = current.activeAnimationId;
   character.updatedAt = updated.updatedAt;
   const summary = character.animations.find(a => a.id === current.activeAnimationId)!;
   if (summary) {
-  const animation: AnimationManifest = { ...summary, motionPrompt: updated.motionPrompt, motionModel: updated.motionModel,
-    frames: updated.frames, selectedFrameIndices: updated.selectedFrameIndices, spritesheet: updated.spritesheet,
-    spritesheetFrameCount: updated.spritesheetFrameCount, aseprite: updated.aseprite, previewGif: updated.previewGif, updatedAt: updated.updatedAt };
-  await writeJson(spriteFile(animationPath(summary.id, "animation.json")), animation);
+    const animation: AnimationManifest = {
+      ...summary,
+      motionPrompt: updated.motionPrompt,
+      motionModel: updated.motionModel,
+      frames: updated.frames,
+      selectedFrameIndices: updated.selectedFrameIndices,
+      spritesheet: updated.spritesheet,
+      spritesheetFrameCount: updated.spritesheetFrameCount,
+      aseprite: updated.aseprite,
+      previewGif: updated.previewGif,
+      updatedAt: updated.updatedAt,
+      perspective: updated.perspective,
+      direction: updated.direction,
+      moveType: updated.moveType,
+      assetKind: updated.assetKind,
+      endingType: updated.endingType,
+    };
+    await writeJson(spriteFile(animationPath(summary.id, "animation.json")), animation);
   }
   await writeJson(spriteFile(PROJECT_FILES.manifest), character);
+  const spriteEntry = updated.project!.sprites.find(s => s.id === current.project!.activeSpriteId);
+  if (spriteEntry) {
+    if (character.kind) spriteEntry.kind = character.kind;
+    if (character.category) spriteEntry.category = character.category;
+  }
   await writeProjectDocument(updated.project!);
   return updated;
 }
@@ -237,14 +305,32 @@ export async function updateSprite(patch: Partial<ProjectManifest>): Promise<Pro
 export function toView(m: ProjectManifest): ProjectView {
   const doc = m.project!;
   const base = `/projects/${encodeURIComponent(doc.name)}/sprites/${encodeURIComponent(doc.activeSpriteId)}/`;
-  return { project: doc, name: doc.name, activeAnimationId: m.activeAnimationId, animations: m.animations,
-    asepriteUrl: m.aseprite ? base + m.aseprite : null, spritePrompt: m.spritePrompt, spriteModel: m.spriteModel,
-    motionPrompt: m.motionPrompt, motionModel: m.motionModel,
-    spriteUrl: m.sprite ? base + m.sprite : null, spriteDimensions: m.spriteDimensions,
-    frames: m.frames.map(f => base + f), selectedFrameIndices: m.selectedFrameIndices,
+  return {
+    project: doc,
+    name: doc.name,
+    activeAnimationId: m.activeAnimationId,
+    animations: m.animations,
+    asepriteUrl: m.aseprite ? base + m.aseprite : null,
+    spritePrompt: m.spritePrompt,
+    spriteModel: m.spriteModel,
+    motionPrompt: m.motionPrompt,
+    motionModel: m.motionModel,
+    spriteUrl: m.sprite ? base + m.sprite : null,
+    spriteDimensions: m.spriteDimensions,
+    frames: m.frames.map(f => base + f),
+    selectedFrameIndices: m.selectedFrameIndices,
     spritesheetFrameCount: m.spritesheetFrameCount,
     spritesheetUrl: m.spritesheet ? base + m.spritesheet : null,
-    previewGifUrl: m.previewGif ? base + m.previewGif : null, updatedAt: m.updatedAt };
+    previewGifUrl: m.previewGif ? base + m.previewGif : null,
+    updatedAt: m.updatedAt,
+    kind: m.kind ?? "character",
+    category: m.category,
+    perspective: m.perspective ?? "isometric",
+    direction: m.direction ?? "N",
+    moveType: m.moveType ?? "walk",
+    assetKind: m.assetKind ?? (m.kind === "asset" ? "asset" : "character"),
+    endingType: m.endingType ?? "seamless",
+  };
 }
 
 async function moveFolder(source: string, target: string, commit: () => Promise<void>): Promise<void> {
@@ -453,10 +539,26 @@ export async function deleteSavedProject(name: string): Promise<void> {
   await rm(projectDir(name), { recursive: true });
 }
 
-export async function changeSprite(action: "new" | "load" | "rename", value: string): Promise<ProjectView> {
+export async function changeSprite(
+  action: "new" | "load" | "rename" | "delete",
+  value: string,
+  kind?: "character" | "asset",
+  category?: string,
+): Promise<ProjectView> {
   const doc = await readProjectDocument(currentProjectName());
   doc.activeSpriteId = projectContext.getStore()!.spriteId;
   if (action === "load" && !doc.sprites.some(s => s.id === value)) throw new Error("Character not found");
+  if (action === "delete") {
+    const idx = doc.sprites.findIndex(s => s.id === value);
+    if (idx < 0) throw new Error("Character not found");
+    doc.sprites.splice(idx, 1);
+    if (doc.activeSpriteId === value) {
+      doc.activeSpriteId = doc.sprites[Math.min(idx, doc.sprites.length - 1)]?.id ?? "";
+    }
+    const dir = path.join(projectDir(doc.name), "sprites", value);
+    await deleteAssetFolder(dir, () => writeProjectDocument(doc));
+    return openProject(doc.name);
+  }
   if (action !== "load") {
     value = assetName(value);
     if (doc.sprites.some(s => assetName(s.name).toLowerCase() === value.toLowerCase() && (action === "new" || s.id !== doc.activeSpriteId))) throw new Error("Character name already exists");
@@ -466,10 +568,23 @@ export async function changeSprite(action: "new" | "load" | "rename", value: str
     ensureInsideRoot(dir);
     await mkdir(path.dirname(dir), { recursive: true });
     await mkdir(dir);
-    const character: CharacterManifest = { version: 2, name: doc.name, spritePrompt: "", spriteModel: DEFAULT_IMAGE_MODEL,
-      sprite: null, spriteDimensions: null, activeAnimationId: "", animations: [], updatedAt: new Date().toISOString() };
+    const spriteKind = kind ?? "character";
+    const spriteCategory = category ?? (spriteKind === "asset" ? "Main Assets" : undefined);
+    const character: CharacterManifest = {
+      version: 2,
+      name: doc.name,
+      spritePrompt: "",
+      spriteModel: DEFAULT_IMAGE_MODEL,
+      sprite: null,
+      spriteDimensions: null,
+      activeAnimationId: "",
+      animations: [],
+      updatedAt: new Date().toISOString(),
+      kind: spriteKind,
+      category: spriteCategory,
+    };
     await writeJson(path.join(dir, "sprite.json"), character);
-    doc.sprites.push({ id: value, name: value, path: `sprites/${value}/sprite.json` });
+    doc.sprites.push({ id: value, name: value, path: `sprites/${value}/sprite.json`, kind: spriteKind, category: spriteCategory });
     doc.activeSpriteId = value;
   } else if (action === "load") doc.activeSpriteId = value;
   else {

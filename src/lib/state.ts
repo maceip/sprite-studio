@@ -5,8 +5,8 @@ import type {
   VideoModelOption,
 } from "./api";
 
-export const DEFAULT_IMAGE_MODEL = "openai/gpt-image-2.5-flare";
-export const DEFAULT_VIDEO_MODEL = "x-ai/grok-imagine-video";
+export const DEFAULT_IMAGE_MODEL = "gpt-image-2.5-flare-2026-09-08";
+export const DEFAULT_VIDEO_MODEL = "sora-2";
 
 export type AppStatus =
   | "idle"
@@ -40,6 +40,13 @@ export interface AppState {
   previewGifBuilding: boolean;
   currentProjectName: string;
   savedProjects: ProjectSummary[];
+  kind: "character" | "asset";
+  category: string;
+  perspective: "isometric" | "sidescroller";
+  direction: string;
+  moveType: string;
+  assetKind: "character" | "asset";
+  endingType: "open-ended" | "seamless" | "custom";
 }
 
 export function createInitialState(): AppState {
@@ -67,6 +74,13 @@ export function createInitialState(): AppState {
     previewGifBuilding: false,
     currentProjectName: "",
     savedProjects: [],
+    kind: "character",
+    category: "Main Assets",
+    perspective: "isometric",
+    direction: "N",
+    moveType: "walk",
+    assetKind: "character",
+    endingType: "seamless",
   };
 }
 
@@ -96,6 +110,13 @@ export function hydrateFromView(view: ProjectView): Partial<AppState> {
     previewGifSrc: cacheBust(view.previewGifUrl, v),
     previewGifBuilding: false,
     currentProjectName: view.name,
+    kind: view.kind ?? "character",
+    category: view.category ?? (view.kind === "asset" ? "Main Assets" : "Main Characters"),
+    perspective: view.perspective ?? "isometric",
+    direction: view.direction ?? "N",
+    moveType: view.moveType ?? "walk",
+    assetKind: view.assetKind ?? (view.kind === "asset" ? "asset" : "character"),
+    endingType: view.endingType ?? "seamless",
   };
 }
 
