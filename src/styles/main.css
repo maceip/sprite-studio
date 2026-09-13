@@ -131,6 +131,30 @@ svg.btn__icon,
   color: #1c4e37;
 }
 
+/* Glass Refraction Filter Definition - Absolute Zero footprint flex/flow exclusion */
+.glass-definitions {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+  display: block !important;
+  flex: 0 0 0px !important;
+}
+
+#app {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
 /* ==========================================================================
    Full Studio Layout — Left-Aligned Flush to Screen
    ========================================================================== */
@@ -138,13 +162,16 @@ svg.btn__icon,
 .trae-experience,
 .app.studio-experience {
   display: flex;
+  width: 100vw;
   height: 100vh;
   min-height: 520px;
+  margin: 0;
   padding: 0;
   gap: 0;
   background: #eef2e9;
   box-sizing: border-box;
   overflow: hidden;
+  position: relative;
 }
 
 /* ==========================================================================
@@ -153,9 +180,9 @@ svg.btn__icon,
 
 .workspace-sidebar,
 .studio-sidebar {
-  width: 272px;
-  min-width: 272px;
-  max-width: 272px;
+  width: 280px;
+  min-width: 280px;
+  max-width: 280px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -197,7 +224,7 @@ svg.btn__icon,
 }
 
 .sidebar-collapsed .workspace-sidebar {
-  margin-left: -272px;
+  margin-left: -280px;
   opacity: 0;
   pointer-events: none;
 }
@@ -300,7 +327,7 @@ svg.btn__icon,
 .workspace-tabs,
 .sidebar-mode-toggle {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1.15fr 0.95fr 0.9fr;
   gap: 2px;
   background: rgba(8, 28, 18, 0.55);
   border: 1px solid rgba(215, 255, 222, 0.14);
@@ -314,9 +341,9 @@ svg.btn__icon,
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
-  padding: 6px 4px;
+  padding: 6px 2px;
   font-size: 11px;
   font-weight: 550;
   color: #c4dcca;
@@ -339,8 +366,6 @@ svg.btn__icon,
 .sidebar-mode-btn span {
   font-size: 11px;
   font-weight: 550;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

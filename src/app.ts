@@ -1189,8 +1189,8 @@ function escapeAttr(s: string): string {
 function renderShell(): string {
   return `
     <div id="editor" class="trae-experience app studio-experience">
-      <!-- Glass Refraction SVG Filter Definition -->
-      <svg class="glass-definitions" aria-hidden="true">
+      <!-- Glass Refraction SVG Filter Definition (Zero footprint) -->
+      <svg class="glass-definitions" aria-hidden="true" style="position: absolute; width: 0; height: 0; pointer-events: none; visibility: hidden;">
         <defs>
           <filter id="emerald-refraction" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
             <feImage href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22400%22%20height%3D%22100%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22x%22%3E%3Cstop%20stop-color%3D%22%23ff8080%22%2F%3E%3Cstop%20offset%3D%22.08%22%20stop-color%3D%22%23808080%22%2F%3E%3Cstop%20offset%3D%22.92%22%20stop-color%3D%22%23808080%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23008080%22%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D%22y%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20stop-color%3D%22%2380ff80%22%2F%3E%3Cstop%20offset%3D%22.2%22%20stop-color%3D%22%23808080%22%20stop-opacity%3D%220%22%2F%3E%3Cstop%20offset%3D%22.8%22%20stop-color%3D%22%23808080%22%20stop-opacity%3D%220%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23800080%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%22400%22%20height%3D%22100%22%20fill%3D%22url(%23x)%22%2F%3E%3Crect%20width%3D%22400%22%20height%3D%22100%22%20fill%3D%22url(%23y)%22%2F%3E%3C%2Fsvg%3E" x="0" y="0" width="100%" height="100%" preserveAspectRatio="none" result="map"></feImage>
