@@ -55,6 +55,8 @@ import {
   assetName,
 } from "./projects.js";
 import { pipelineRouter } from "./pipeline/routes.js";
+import { decodeImageToRgba, writeRgbaToPng } from "./pipeline/decoder.js";
+import { AnimationVerificationHarness, type RawFrame } from "./pipeline/harness.js";
 
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -448,6 +450,39 @@ app.post("/api/sprites/animate", requireAnimationKey, async (req, res) => {
 
     const framesAbs = path.join(activeSpriteDir(), prefix, PROJECT_FILES.framesDir);
     const frameFiles = await extractFrames(videoAbs, framesAbs);
+
+    // Verification Harness & Auto-Stabilizer Hook
+    try {
+      const rawFrames: RawFrame[] = [];
+      for (const f of frameFiles) {
+        const fPath = path.join(framesAbs, f);
+        const buf = await readFile(fPath);
+        rawFrames.push(await decodeImageToRgba(buf));
+      }
+
+      if (assetKind === "asset") {
+        const verifyResult = AnimationVerificationHarness.verifyMachineryKinematics(rawFrames);
+        console.log("[pipeline verify:machinery]", verifyResult.diagnosis);
+      } else {
+        const verifyResult = AnimationVerificationHarness.verifyBipedLocomotion(rawFrames);
+        console.log("[pipeline verify:biped]", verifyResult.diagnosis);
+
+        // Auto-stabilizer: if drift exceeds threshold, transform into stationary treadmill cycle
+        if (rawFrames.length > 0 && verifyResult.driftPx > rawFrames[0].width * 0.08) {
+          console.log(
+            `[pipeline auto-stabilize] Correcting drift (${verifyResult.driftPx.toFixed(1)}px) to stationary treadmill cycle...`
+          );
+          const stabilized = AnimationVerificationHarness.stabilizeAndTreadmill(rawFrames);
+          for (let i = 0; i < stabilized.length; i++) {
+            const fPath = path.join(framesAbs, frameFiles[i]);
+            await writeRgbaToPng(stabilized[i].rgba, stabilized[i].width, stabilized[i].height, fPath);
+          }
+        }
+      }
+    } catch (verErr) {
+      console.warn("[pipeline verify warning]", verErr);
+    }
+
     const frames = frameFiles.map((f) => `${prefix}/${PROJECT_FILES.framesDir}/${f}`);
 
     const m = await updateSprite({

@@ -56,3 +56,44 @@ export async function decodeImageToRgba(imageBuffer: Buffer): Promise<DecodedIma
     child.stdin.end(imageBuffer);
   });
 }
+
+/**
+ * Encodes raw RGBA bytes into a PNG file on disk using ffmpeg.
+ */
+export async function writeRgbaToPng(
+  rgba: Uint8Array | Buffer,
+  width: number,
+  height: number,
+  outPath: string
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      "ffmpeg",
+      [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgba",
+        "-s",
+        `${width}x${height}`,
+        "-i",
+        "pipe:0",
+        outPath,
+      ],
+      { stdio: ["pipe", "pipe", "pipe"] }
+    );
+
+    child.on("error", (err) => reject(new Error(`Failed to spawn ffmpeg: ${err.message}`)));
+    child.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`ffmpeg writeRgbaToPng failed with code ${code}`));
+    });
+
+    child.stdin.end(Buffer.isBuffer(rgba) ? rgba : Buffer.from(rgba));
+  });
+}
+

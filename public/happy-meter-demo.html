@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Happy Meter Web Component Demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      background: radial-gradient(circle at 50% 20%, #1e293b 0%, #0f172a 100%);
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      margin: 0;
+      padding: 48px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 32px;
+    }
+    header {
+      text-align: center;
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 0 0 8px 0;
+      color: #38bdf8;
+    }
+    p.desc {
+      color: #94a3b8;
+      font-size: 14px;
+      max-width: 520px;
+      margin: 0;
+      line-height: 1.5;
+    }
+    .panel {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(12px);
+      border-radius: 16px;
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 28px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.25);
+      padding: 16px 24px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .control-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    input[type=range] {
+      width: 180px;
+      accent-color: #ec4899;
+      cursor: pointer;
+    }
+    input[type=time] {
+      background: #0f172a;
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #fff;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .presets {
+      display: flex;
+      gap: 8px;
+    }
+    button.preset-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #e2e8f0;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    button.preset-btn:hover {
+      background: #38bdf8;
+      color: #0f172a;
+      border-color: #38bdf8;
+    }
+    .code-preview {
+      background: #020617;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 14px 20px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      color: #38bdf8;
+      max-width: 560px;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>&lt;happy-meter&gt; Web Component</h1>
+    <p class="desc">Fully wired Custom Element extracted from the UI sprite sheet. Reactive attributes control orbital celestial time (24 dials) and linear progress filling.</p>
+  </header>
+
+  <div class="panel">
+    <!-- Live Web Component Instance -->
+    <happy-meter id="demoMeter" value="82" time="14:00"></happy-meter>
+
+    <div class="controls">
+      <div class="control-item">
+        <label for="rangeVal">Value:</label>
+        <input type="range" id="rangeVal" min="0" max="100" value="82">
+        <span id="rangeLabel" style="min-width: 38px;">82%</span>
+      </div>
+
+      <div class="control-item">
+        <label for="timeVal">Time:</label>
+        <input type="time" id="timeVal" value="14:00">
+      </div>
+
+      <div class="presets">
+        <button class="preset-btn" data-time="06:00" data-val="25">Dawn (06:00)</button>
+        <button class="preset-btn" data-time="12:00" data-val="65">Noon (12:00)</button>
+        <button class="preset-btn" data-time="18:00" data-val="90">Sunset (18:00)</button>
+        <button class="preset-btn" data-time="23:00" data-val="100">Midnight (23:00)</button>
+      </div>
+    </div>
+
+    <div class="code-preview" id="snippetView">
+      &lt;happy-meter value="82" time="14:00"&gt;&lt;/happy-meter&gt;
+    </div>
+  </div>
+
+  <script type="module">
+    import './components/happy-meter.js';
+
+    const meter = document.getElementById('demoMeter');
+    const rangeVal = document.getElementById('rangeVal');
+    const rangeLabel = document.getElementById('rangeLabel');
+    const timeVal = document.getElementById('timeVal');
+    const snippetView = document.getElementById('snippetView');
+
+    function sync() {
+      const val = rangeVal.value;
+      const time = timeVal.value;
+      meter.setAttribute('value', val);
+      meter.setAttribute('time', time);
+      rangeLabel.textContent = `${val}%`;
+      snippetView.textContent = `<happy-meter value="${val}" time="${time}"></happy-meter>`;
+    }
+
+    rangeVal.addEventListener('input', sync);
+    timeVal.addEventListener('input', sync);
+
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        rangeVal.value = btn.dataset.val;
+        timeVal.value = btn.dataset.time;
+        sync();
+      });
+    });
+
+    sync();
+  </script>
+</body>
+</html>
