@@ -54,6 +54,7 @@ import {
   animationPath,
   assetName,
 } from "./projects.js";
+import { pipelineRouter } from "./pipeline/routes.js";
 
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -152,6 +153,8 @@ app.get("/api/models/image", (_req, res) => {
 app.get("/api/models/music", (_req, res) => {
   res.json({ models: MUSIC_MODELS, default: DEFAULT_MUSIC_MODEL, hasApiKey: Boolean(process.env.ELEVENLABS_API_KEY) });
 });
+
+app.use("/api/pipeline", pipelineRouter);
 
 function musicId(req: Request): string {
   const id = req.get("X-Music-Id");

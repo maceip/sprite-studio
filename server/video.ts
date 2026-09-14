@@ -106,6 +106,19 @@ export function buildMotionPrompt(text: string, options?: MotionOptions): string
       "Keep the full character visible with consistent scale and framing. " +
       "Perform only the requested movement; do not add motion or morph the character."
     );
+    const isLocomotion =
+      /walk|run|march|jog|stride|step|carry|lineup|action/i.test(text) ||
+      options?.moveType === "walk" ||
+      options?.moveType === "run";
+    if (isLocomotion) {
+      directives.push(
+        "STATIONARY TREADMILL LOCOMOTION CONSTRAINTS:\n" +
+        "- The character must walk/run IN PLACE ON A STATIONARY TREADMILL. Center of mass, hips, and torso stay locked at the center of the frame.\n" +
+        "- Do NOT translate, glide, skate, or drift across the screen. Never move the subject horizontally across the frame like a statue.\n" +
+        "- BOTH LEGS MUST ACTIVELY CYCLE: alternating high knee lifts, bending at hips and knees, planting feet firmly on the ground baseline.\n" +
+        "- Any carried object, tool, ladder, box, or wheelbarrow stays firmly held in the hands and naturally bobs with torso cadence while the legs step actively."
+      );
+    }
   }
 
   if (endingType === "seamless") {
